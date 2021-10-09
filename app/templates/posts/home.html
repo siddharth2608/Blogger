@@ -1,0 +1,66 @@
+{% extends "layout.html" %}
+{% block content %}
+    {% for post in posts %}
+        <article class="media content-section">
+          {% if post.avatar %}
+          <img class="rounded-circle article-img" src="{{ url_for('static', filename='profile/'+ post.avatar) }}">
+          {% else %}
+          <img class="rounded-circle article-img" src="{{ url_for('static', filename='profile/'+ 'default.jpg') }}">
+          {% endif %}
+          <div class="media-body">
+            <div class="article-metadata">
+              <small class="text-muted">{{ post.username }}</small>
+              <small class="text-muted">{{ post.created_at }}</small>
+              {% if post.instagram %}
+              <a href={{ post.instagram }}><i class="fab fa-instagram"></i></a>
+              {% endif %}
+              {% if post.twitter %}
+              <a href={{ post.twitter }}><i class="fab fa-twitter"></i></a>
+              {% endif %}
+              {% if post.quora %}
+              <a href={{ post.quora }}><i class="fab fa-quora"></i></a>
+              {% endif %}
+            </div>
+            <h2><a class="article-title">{{ post.title }}</a></h2>
+            <p class="article-content">{{ post.content }}</p>
+            {% if post.photo1 and post.video %}
+            <div class="container">
+              <div class="mySlides">
+                <img src="{{ url_for('static', filename='profile/'+post.photo1) }}">
+              </div>                
+              <div class="mySlides">
+                <iframe width="420" height="345" src='{{ post.video }}'frameborder="0" allowfullscreen></iframe>
+              </div>
+              <a class="prev" onclick="plusSlides(-1)">❮</a>
+              <a class="next" onclick="plusSlides(1)">❯</a>
+            </div>
+            {% endif %}
+          </div>
+          {% if user_id %}
+            <div>
+              {% if post.id in arr %}
+                {% if post.rating_action == 'like' %}
+                  <button class="fa fa-thumbs-up like-btn" data-id="{{ post.id }}"></button>
+                  <span id="post_like_{{post.id}}">{{ post.like }}</span>
+                  <button class="fa fa-thumbs-o-down dislike-btn" data-dislike-id="{{ post.id }}"></button>
+                  <span id="post_unlike_{{post.id}}">{{post.unlike}}</span>
+                {% elif post.rating_action == 'dislike' %}
+                  <button class="fa fa-thumbs-o-up like-btn" data-id="{{ post.id }}"></button>
+                  <span id="post_like_{{post.id}}">{{ post.like }}</span>
+                  <button class="fa fa-thumbs-down dislike-btn" data-dislike-id="{{ post.id }}"></button>
+                  <span id="post_unlike_{{post.id}}">{{post.unlike}}</span>  
+                {% endif %}
+              {% else %}
+                <button class="fa fa-thumbs-o-up like-btn" data-id="{{ post.id }}"></button>
+                <span id="post_like_{{post.id}}">{{ post.like }}</span>
+                <button class="fa fa-thumbs-o-down dislike-btn" data-dislike-id="{{ post.id }}"></button>
+                <span id="post_unlike_{{post.id}}">{{post.unlike}}</span>
+              {% endif %}
+            </div>
+          {% endif %}
+        </article>
+    {% endfor %}
+    {% for pages in range(1,page_num) %}
+      <a class="btn btn-info mb-4" href="{{ url_for('bp.posts_list', page=pages) }}">{{ pages }}</a>
+    {% endfor %}  
+{% endblock content %}

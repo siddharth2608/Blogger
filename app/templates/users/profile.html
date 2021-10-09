@@ -1,0 +1,25 @@
+{% extends "layout.html" %}
+{% block content %}
+<h1>{{ user_data.username }} Posts</h1>
+<a class="btn btn-secondary btn-sm mt-1 mb-1" href="{{ url_for('bp.deactivate_user', user_id=user_data.id) }}">Deactivate</a>
+    {% for post in posts %}
+        <article class="media content-section">
+          {% if user_data.avatar %}
+          <img class="rounded-circle article-img" src="{{url_for('static',filename='profile/'+user_data.avatar) }}">
+          {% else %}
+          <img class="rounded-circle article-img" src="{{url_for('static',filename='profile/'+'default.jpg') }}">
+          {% endif %}
+          <div class="media-body">
+            <div class="article-metadata">
+              <small class="text-muted">{{ post.created_at }}</small>
+              <a href={{ post.instagram }}><i class="fa fa-instagram" style="font-size:36px"></i></a>
+            </div>
+            <h2><a class="article-title" href="{{url_for('bp.post_detail',post_id=post.id)}}">{{ post.title }}</a></h2>
+            <p class="article-content">{{ post.content }}</p>
+            {% if post.video %}
+            <p class="article-content"><iframe width="420" height="345" src='{{ post.video }}'frameborder="0" allowfullscreen></iframe></p>
+            {% endif %}
+          </div>
+        </article>
+    {% endfor %}
+{% endblock content %}
