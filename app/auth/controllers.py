@@ -18,7 +18,6 @@ class AuthController:
 
 		self.db_conn.write_db(query)
 
-
 	def get_user_data(self, login_data):
 		query = '''select * from users where email = "{email}" and password = "{password}"'''.format(**login_data)
 		result = self.db_conn.query_db_one(query)

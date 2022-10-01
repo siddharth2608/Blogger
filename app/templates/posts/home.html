@@ -37,7 +37,7 @@
             {% endif %}
           </div>
           {% if user_id %}
-            <div>
+            <div> 
               {% if post.id in arr %}
                 {% if post.rating_action == 'like' %}
                   <button class="fa fa-thumbs-up like-btn" data-id="{{ post.id }}"></button>

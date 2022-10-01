@@ -15,10 +15,10 @@ $(document).ready(function(){
 		console.log(action);
 		//var like_count = document.getElementById('post_like_'+post_id).innerHTML;
 		//console.log(like_count);
-		$.ajax({
-			url:'http://127.0.0.1:5000/posts/react/',
+		$.ajax({ 
+			url:'http://127.0.0.1:5000/posts/react',
 			type:'post',
-			data: {
+			data:{
 				'action':action,
 				'post_id':post_id
 			},

@@ -10,9 +10,7 @@ from app.mailer import send_mail
 import random, string
 
 
-
 class RegisterUser(MethodView):
-
 	def get(self):
 		form = RegistrationForm()
 		title = 'register'
