@@ -4,7 +4,7 @@ from datetime import datetime
 class PostController:
 
 	def __init__(self):
-		self.db_conn = Config.SQLITE_CONN
+		self.db_conn = Config.MYSQL_CONN
 
 	def save_post_data(self, post_data):
 		current_datetime = datetime.now().strftime("%Y-%m-%d")
@@ -16,9 +16,14 @@ class PostController:
 	def save_post_data_with_image(self,post_data):
 		current_datetime = datetime.now().strftime("%Y-%m-%d")
 		post_data.update({'created_at': current_datetime})
-		query = '''insert into posts (title, content,created_at, user_id, video,photo1)
-					values ("{title}","{content}","{created_at}","{user_id}","{video}","{photo1}")'''.format(**post_data)
+		query = '''insert into posts (title, content,created_at, user_id, video)
+					values ("{title}","{content}","{created_at}","{user_id}","{video}")'''.format(**post_data)
+		return self.db_conn.write_db(query)
+
+	def save_imageurl_in_posts(self,data):
+		query = '''insert into posts (photo1) values ("{url}") where title = "{title}"'''.format(**data)
 		self.db_conn.write_db(query)
+
 
 	def fetch_paginated_post(self, page):
 		query = '''select p.*, u.instagram, u.username, u.avatar,u.twitter,u.quora, ri.rating_action
@@ -32,6 +37,12 @@ class PostController:
 	def fetch_posts_count(self):
 		query = '''select count(1) as posts_count from posts'''
 		return self.db_conn.query_db_one(query)
+
+	def get_search_data(self,form_data):
+		query = '''select p.*, u.* from posts as p
+					left join users u on u.id=p.user_id
+		 where title LIKE "%{search}%" or content LIKE "%{search}%"'''.format(**form_data)
+		return self.db_conn.query_db(query)
 
 	def get_detail(self,post_id):
 		query = '''select * from posts where id = "{}"'''.format(post_id)
@@ -97,3 +108,17 @@ class PostController:
 			query = '''update posts set unlike=unlike-1 where id = {}'''.format(post_id)
 			print(query)
 			return self.db_conn.write_db(query)
+
+	def save_data_from_file(self,datas):
+		current_datetime = datetime.now().strftime("%Y-%m-%d")
+		query = 'insert into posts (title, content, user_id, photo1, video, created_at) values '
+		for data in datas:
+			query=query+"('"+data['title']+"',"
+			query=query+"'"+data['content']+"',"
+			query=query+"'"+str(data['user_id'])+"',"
+			query=query+"'"+data['photo1']+"',"
+			query=query+"'"+data['video']+"',"
+			query=query+"'"+current_datetime+"'),"
+		query = query[:-1]
+		print(query)
+		self.db_conn.write_db(query)

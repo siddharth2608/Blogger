@@ -7,7 +7,6 @@ from app.users import view as users_view
 blueprint = Blueprint('bp', __name__)
 
 
-
 # auth URLs
 AUTH_PREFIX = '/auth'
 blueprint.add_url_rule(AUTH_PREFIX + '/register', view_func=auth_view.RegisterUser.as_view('register_user'))
@@ -26,6 +25,8 @@ blueprint.add_url_rule(POSTS_PREFIX + '/delete/<int:post_id>', view_func=posts_v
 blueprint.add_url_rule(POSTS_PREFIX + '/update/<int:post_id>', view_func=posts_view.UpdatePost.as_view('update_post'))
 blueprint.add_url_rule(POSTS_PREFIX + '/detail/<int:post_id>', view_func=posts_view.PostDetail.as_view('post_detail'))
 blueprint.add_url_rule(POSTS_PREFIX + '/react/', view_func=posts_view.ReactPost.as_view('react_post'))
+blueprint.add_url_rule(POSTS_PREFIX + '/search/', view_func=posts_view.SearchPost.as_view('search_post'))
+blueprint.add_url_rule(POSTS_PREFIX + '/create_posts_from_file', view_func=posts_view.CreatePostFromFile.as_view('create_posts_from_file'))
 blueprint.add_url_rule('/', view_func=posts_view.Home.as_view('start'))
 
 #users URLs

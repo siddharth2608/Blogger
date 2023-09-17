@@ -8,6 +8,12 @@ from app.auth.forms import RegistrationForm, LoginForm,UpdateAccountForm,ResetFo
 from app.auth.controllers import AuthController
 from app.mailer import send_mail
 import random, string
+from werkzeug.utils import secure_filename
+from app.aws_connections import *
+from config import Config
+
+
+S3_BUCKET = "bloggapp"
 
 
 class RegisterUser(MethodView):
@@ -18,32 +24,23 @@ class RegisterUser(MethodView):
 
 	def post(self):
 		form = RegistrationForm()
-		print(form)
+		file=''
+		url1 = ''
 		if form.validate_on_submit():
-			if form.picture.data:
-				filename = self.save_picture(form.picture.data)
-				register_data = {'username': form.username.data,'email': form.email.data,'password': form.password.data,'instagram': form.instagram.data, 'twitter':form.twitter.data, 'quora':form.quora.data, 'avatar':filename}
-				AuthController().save_registration_form(register_data)
-				flash('Your account has been created! You are now able to log in', 'success')
-				return redirect(url_for('bp.login_user'))
-			else:	
-				register_data = {'username': form.username.data,'email': form.email.data,'password': form.password.data,'instagram': form.instagram.data, 'twitter':form.twitter.data, 'quora':form.quora.data}
-				AuthController().save_registration_form_without_image(register_data)
-				flash('Your account has been created! You are now able to log in', 'success')
-				return redirect(url_for('bp.login_user'))
+			file = form.picture.data
+			if file and is_file_type_allowed(file.filename):
+				provided_file_name = secure_filename(file.filename)
+				stored_file_name = upload_file_to_s3(file,provided_file_name)
+				url1 = f"https://{S3_BUCKET}.s3.amazonaws.com/{stored_file_name}"
+			if url1 == '':
+				url1 = "https://bloggapp.s3.amazonaws.com/default.jpg"
+			register_data = {'username': form.username.data,'email': form.email.data,'password': form.password.data,'instagram': form.instagram.data, 'twitter':form.twitter.data, 'quora':form.quora.data, 'avatar':url1}
+			AuthController().save_registration_form(register_data)
+			flash('Your account has been created! You are now able to log in', 'success')
+			return redirect(url_for('bp.login_user'))
+			
 		return render_template('auth/register.html',form=form)	
 
-	def save_picture(self, form_picture):
-		random_hex = secrets.token_hex(8)
-		_, f_ext = os.path.splitext(form_picture.filename)
-		picture_fn = random_hex + f_ext
-		picture_path = os.path.join(current_app.root_path, 'static/profile', picture_fn)
-
-		output_size = (125, 125)
-		i = Image.open(form_picture)
-		i.thumbnail(output_size)
-		i.save(picture_path)
-		return picture_fn
 
 
 class LoginUser(MethodView):
@@ -57,19 +54,21 @@ class LoginUser(MethodView):
 		if form.validate_on_submit():
 			login_data = {'email': form.email.data,'password': form.password.data}
 			user_data = AuthController().get_user_data(login_data)
-			print(user_data)
 			if user_data:
+				token = ''.join(random.choices(string.ascii_letters + string.digits, k=32))
+				user_id = (user_data.get('id'))
+				Config.REDIS_CONN.set(str(token), str(user_id))
 				response = make_response(redirect(url_for('bp.posts_list',page=1)))
-				response.set_cookie('userId', str(user_data.get('id')))
+				response.set_cookie('userId', str(token))
 				return response
 			else:
 				flash('Login Unsuccessful. Please check email and password', 'danger')	
 		return render_template('/auth/login.html', title='Login', form=form)
 
-
 class UpdateUser(MethodView):
 	def get(self):
-		user_id = request.cookies.get('userId')
+		token = request.cookies.get('userId')
+		user_id = int(Config.REDIS_CONN.get(token))
 		user = AuthController().get_user_detail(user_id)
 		form = UpdateAccountForm()
 		form.username.data = user.get('username')
@@ -78,37 +77,32 @@ class UpdateUser(MethodView):
 		form.quora.data = user.get('quora')
 		return render_template('/auth/update_account.html',form=form,user_id=user_id,title='Update Account')
 
-	def save_picture(self, form_picture):
-		random_hex = secrets.token_hex(8)
-		_, f_ext = os.path.splitext(form_picture.filename)
-		picture_fn = random_hex + f_ext
-		picture_path = os.path.join(current_app.root_path, 'static/profile', picture_fn)
-
-		output_size = (125, 125)
-		i = Image.open(form_picture)
-		i.thumbnail(output_size)
-		i.save(picture_path)
-		return picture_fn
-
 	def post(self):
 		form = UpdateAccountForm()
 		if form.validate_on_submit():
-			if form.picture.data:
-				filename = self.save_picture(form.picture.data)	
-			user_id = request.cookies.get('userId')
-			print(request.files)
-			if form.picture.data:
-				user_data = {'username': form.username.data, 'instagram': form.instagram.data, 'id':user_id, 'avatar': filename, 'twitter':form.twitter.data, 'quora':form.quora.data}
-				AuthController().update_user_with_image(user_data)
-			else:
-				user_data = {'username': form.username.data, 'instagram': form.instagram.data, 'twitter':form.twitter.data, 'quora':form.quora.data, 'id':user_id}
-				AuthController().update_user_without_image(user_data)	
-		return redirect(url_for('bp.posts_list',page=1))	
+			file=''
+			url1 = ''
+			file = form.picture.data
+			if file and is_file_type_allowed(file.filename):
+				provided_file_name = secure_filename(file.filename)
+				stored_file_name = upload_file_to_s3(file,provided_file_name)
+				# url = get_presigned_file_url(stored_file_name,provided_file_name)
+				url1 = f"https://{S3_BUCKET}.s3.amazonaws.com/{stored_file_name}"
+			if url1 == '':
+				url1 = "https://bloggapp.s3.amazonaws.com/default.jpg"
+			token = request.cookies.get('userId')
+			user_id = int(Config.REDIS_CONN.get(token))
+			user_data = {'username': form.username.data, 'instagram': form.instagram.data, 'id':user_id, 'avatar': url1, 'twitter':form.twitter.data, 'quora':form.quora.data}
+			AuthController().update_user_with_image(user_data)
+			return redirect(url_for('bp.posts_list',page=1))	
+		return render_template('/auth/update_account.html',form=form,user_id=user_id,title='Update Account')
 
 class LogoutUser(MethodView):
 	def get(self):
 		resp = make_response(redirect(url_for('bp.posts_list',page=1)))
 		# Delete cookie
+		token = request.cookies.get("userId")
+		Config.REDIS_CONN.delete(token)
 		resp.delete_cookie("userId")
 		return resp
 
@@ -139,7 +133,6 @@ class CheckResetToken(MethodView):
 	def get(self):
 		tokenn = request.args.get('token')
 		email = AuthController().get_email_from_token(tokenn)
-		print(email)
 		if email:
 			AuthController().marks_token_used(tokenn)
 			form = ResetTokenForm()	

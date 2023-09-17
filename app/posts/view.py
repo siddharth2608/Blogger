@@ -1,71 +1,117 @@
 import os
 import secrets
 from flask.views import MethodView
-from flask import render_template, redirect, url_for,request,json
-from app.posts.forms import PostForm,UpdatePostForm,StartForm
+from flask import render_template, redirect, url_for,request,json, flash
+from app.posts.forms import PostForm,UpdatePostForm,StartForm, SearchForm,UploadFileForm
 from app.posts.controllers import PostController
 from app.users.controllers import UserController
 import math
 from PIL import Image
 import random, string
 from flask import render_template,make_response, current_app, Response
+from redis import Redis
+from werkzeug.utils import secure_filename
+from app.aws_connections import *
+import pika
+import base64
+
+
+connection = pika.BlockingConnection(pika.URLParameters("amqps://vdmysoyb:UPUOLzZyoAzNBZ051hSYvK1HEOhbtQkI@armadillo.rmq.cloudamqp.com/vdmysoyb"))
+channel = connection.channel()
+channel.queue_declare(queue='image_queue')
+
+S3_BUCKET = "bloggapp"
+redis = Redis(host='localhost', port=6379, db=0)
+
+
+def parse_txt_data(file):
+	lines = file.read().decode('utf-8').splitlines()
+	token = request.cookies.get('userId')
+	user_id = int(redis.get(token))
+	posts_data =[]
+	for line in lines:
+		data = {}
+		post = line.strip().split('~')
+		data['title']=post[0]
+		data['content']=post[1]
+		data['photo1']=post[2]
+		data['video']=post[3]
+		data['user_id'] = user_id
+		posts_data.append(data)
+	posts_data.pop(0)
+	print(posts_data)
+	return posts_data
+		
 
 class CreatePost(MethodView):
 	def get(self):
 		form = PostForm()
-		user_id = request.cookies.get('userId')
+		token = request.cookies.get('userId')
+		if token is not None:
+			user_id = int(redis.get(token))
 		return render_template('/posts/create.html',form=form,user_id=user_id,title='New Post')
 
 	def post(self):
 		form = PostForm()
+		token = request.cookies.get('userId')
+		user_id = int(redis.get(token))
 		if form.validate_on_submit():
-			user_id = request.cookies.get('userId')
-			if form.photo1.data:
-				filename = self.save_picture(form.photo1.data)
-				post_data = {'title':form.title.data, 'content':form.content.data,'video':form.video.data, 'user_id': user_id, 'photo1': filename}
-				PostController().save_post_data_with_image(post_data)
-			else:
-				post_data = {'title':form.title.data, 'content':form.content.data,'video':form.video.data, 'user_id': user_id} 				
-				PostController().save_post_data(post_data)
-		return redirect(url_for('bp.posts_list',page=1))
+			post_data = {'title':form.title.data, 'content':form.content.data,'video':form.video.data, 'user_id': user_id} #, 'photo1': images
+			postid = PostController().save_post_data_with_image(post_data)
+			print("Post id"+str(postid))
+			img_list_count = len(request.files.getlist('photo1'))
+			if img_list_count>0:
+				image_lst = []
+				for file in request.files.getlist('photo1'):
+					if file and is_file_type_allowed(file.filename):
+						encoded_image_bytes = base64.b64encode(file.read())
+						encoded_image_str = encoded_image_bytes.decode("utf-8")
+						image_lst.append(encoded_image_str)
 
-	def save_picture(self, form_picture):
-		random_hex = secrets.token_hex(8)
-		_, f_ext = os.path.splitext(form_picture.filename)
-		picture_fn = random_hex + f_ext
-		picture_path = os.path.join(current_app.root_path, 'static/profile', picture_fn)
-
-		output_size = (400,300)
-		i = Image.open(form_picture)
-		i.thumbnail(output_size)
-		i.save(picture_path)
-		return picture_fn
-		  
+				upload_data = {
+					"post_id": postid,
+					"image_data": ",".join(image_lst)
+				}
+				channel.basic_publish(exchange='', routing_key='image_queue', body=json.dumps(upload_data))
+			return redirect(url_for('bp.posts_list',page=1))
+		return render_template('/posts/create.html',form=form,user_id=user_id,title='New Post')
+	  
 
 class PostList(MethodView):
 	def get(self,page):
+
 		arr = []
-		posts_count = PostController().fetch_posts_count()
+		token=''
+		user_id=''
 		posts = PostController().fetch_paginated_post(page)
-		user_id = request.cookies.get('userId')
+		posts_count = PostController().fetch_posts_count()
+		if request.cookies.get('userId') is not None:
+			token = request.cookies.get('userId')
+			print(token)
+		if token:
+			user_id = int(redis.get(token))
 		if user_id:
 			action_performed_by_user = PostController().get_postid_by_userid(user_id)
-			print(action_performed_by_user)
 			for i in action_performed_by_user:
 				arr.append(i.get('post_id'))
-			print(arr)	
+			posts_count = posts_count.get('posts_count')/5
+			page_num = math.ceil(posts_count)+1
+			return render_template('/posts/home.html', posts=posts,user_id=user_id,page_num=page_num,arr=arr,title='Home')
+
 		posts_count = posts_count.get('posts_count')/5
 		page_num = math.ceil(posts_count)+1
 		print(posts_count)
 		print(page_num)
-		return render_template('/posts/home.html', posts=posts,user_id=user_id,page_num=page_num,arr=arr,title='Home')
+		return render_template('/posts/home.html', posts=posts,page_num=page_num,title='Home')
+
 	
 
 class ReactPost(MethodView):
 	def post(self):
 		params=dict(request.form)
 		print(params)
-		user_id = request.cookies.get('userId')
+		token = request.cookies.get('userId')
+		user_id = redis.get(token)
 		if params.get('action') == 'like':
 			print('like')
 			PostController().insert_reaction(user_id,params.get('post_id'),params.get('action'))
@@ -85,13 +131,11 @@ class ReactPost(MethodView):
 		print('Successful')	
 		return Response(json.dumps(params),status=200,content_type='application/json')
 
- 
-
-
 
 class PostDetail(MethodView):
 	def get(self,post_id):
-		user_id = request.cookies.get('userId')
+		token = request.cookies.get('userId')
+		user_id = int(redis.get(token))
 		user_data = UserController().get_user_detail(user_id)
 		details = PostController().get_detail(post_id)
 		details.update({'id': str(details.get('id'))})
@@ -115,27 +159,28 @@ class UpdatePost(MethodView):
 	def post(self,post_id):
 		form = UpdatePostForm()
 		if form.validate_on_submit():
-			if form.photo1.data:
-				filename = self.save_picture(form.photo1.data)
-				post_data= {'title':form.title.data, 'content':form.content.data,'video':form.video.data, 'id':post_id,'photo1':filename}
+			img_list_count = len(request.files.getlist('photo1'))
+			token = request.cookies.get('userId')
+			user_id = int(redis.get(token))
+			if img_list_count>0:
+				image_lst = []
+				for file in request.files.getlist('photo1'):
+					if file and is_file_type_allowed(file.filename):
+						provided_file_name = secure_filename(file.filename)
+						stored_file_name = upload_file_to_s3(file,provided_file_name)
+						# url = get_presigned_file_url(stored_file_name,provided_file_name)
+						url1 = f"https://{S3_BUCKET}.s3.amazonaws.com/{stored_file_name}"
+						image_lst.append(url1)
+				images = ",".join(image_lst)
+				print(images)
+				post_data= {'title':form.title.data, 'content':form.content.data,'video':form.video.data, 'id':post_id,'photo1':images}
 				PostController().update_post_with_image(post_data)
+				return redirect(url_for('bp.posts_list',page=1))
 			else:
 				post_data= {'title':form.title.data, 'content':form.content.data,'video':form.video.data, 'id':post_id}	
 				PostController().update_post(post_data)
-		return redirect(url_for('bp.posts_list',page=1))
-
-
-	def save_picture(self, form_picture):
-		random_hex = secrets.token_hex(8)
-		_, f_ext = os.path.splitext(form_picture.filename)
-		picture_fn = random_hex + f_ext
-		picture_path = os.path.join(current_app.root_path, 'static/profile', picture_fn)
-
-		output_size = (400,300)
-		i = Image.open(form_picture)
-		i.thumbnail(output_size)
-		i.save(picture_path)
-		return picture_fn	
+				return redirect(url_for('bp.posts_list',page=1))
+		return render_template('/posts/updatepost.html',form=form,title='Update Post')
 			
 class Home(MethodView):
 	def get(self):
@@ -145,4 +190,46 @@ class Home(MethodView):
 	def post(self):
 		form = StartForm()
 		if form.validate_on_submit():
-			return redirect(url_for('bp.posts_list',page=1))	
+			return redirect(url_for('bp.posts_list',page=1))
+
+class SearchPost(MethodView):
+	def post(self):
+		token=''
+		user_id=''
+		if request.cookies.get('userId') is not None:
+			token = request.cookies.get('userId')
+		if token:
+			user_id = int(redis.get(token))
+		form = SearchForm()
+		searchword = form.search.data
+		form_data = {
+			"search" : searchword
+		}
+		if redis.get(searchword) is None:
+			posts = PostController().get_search_data(form_data)
+			redis.set(searchword,json.dumps(posts))
+			redis.expire(searchword,1800)
+		else:
+			posts = json.loads(redis.get(searchword))
+		print(posts)
+		return render_template('/posts/searchresult.html', form=form, posts=posts,user_id=user_id,title='Search')
+
+class CreatePostFromFile(MethodView):
+
+	def get(self):
+		form=UploadFileForm()
+		return render_template('/posts/upload_file.html',title='Upload File',form=form)
+
+	def post(self):
+		form=UploadFileForm()
+		if 'file' not in request.files:
+			return "No file part"
+		file = request.files['file']
+		if file:
+			datas = parse_txt_data(file)
+			PostController().save_data_from_file(datas)
+			return redirect(url_for('bp.posts_list',page=1))
+		return render_template('/posts/upload_file.html',title='Upload File',form=form)
+
+
+

@@ -20,3 +20,11 @@ class UpdatePostForm(FlaskForm):
 
 class StartForm(FlaskForm):
 	submit = SubmitField('Get Started')	
+
+class SearchForm(FlaskForm):
+	search = StringField('Search', validators=[DataRequired()])
+	submit = SubmitField('submit')
+
+class UploadFileForm(FlaskForm):
+	file = FileField('Upload text file', validators=[FileAllowed(['txt'])])
+	submit = SubmitField('submit')

@@ -2,12 +2,13 @@
 {% block content %}
 <h1>{{ user_data.username }} Posts</h1>
 <a class="btn btn-secondary btn-sm mt-1 mb-1" href="{{ url_for('bp.deactivate_user', user_id=user_data.id) }}">Deactivate</a>
+<a href="{{ url_for('bp.create_posts_from_file') }}">FilePost</a>
     {% for post in posts %}
         <article class="media content-section">
           {% if user_data.avatar %}
-          <img class="rounded-circle article-img" src="{{url_for('static',filename='profile/'+user_data.avatar) }}">
+          <img class="rounded-circle article-img" src="{{ user_data.avatar }}" width="125" height="125">
           {% else %}
-          <img class="rounded-circle article-img" src="{{url_for('static',filename='profile/'+'default.jpg') }}">
+          <img class="rounded-circle article-img" src="{{ user_data.avatar }}" width="125" height="125">
           {% endif %}
           <div class="media-body">
             <div class="article-metadata">
@@ -16,9 +17,31 @@
             </div>
             <h2><a class="article-title" href="{{url_for('bp.post_detail',post_id=post.id)}}">{{ post.title }}</a></h2>
             <p class="article-content">{{ post.content }}</p>
-            {% if post.video %}
-            <p class="article-content"><iframe width="420" height="345" src='{{ post.video }}'frameborder="0" allowfullscreen></iframe></p>
-            {% endif %}
+            
+            <div id="carousel-{{ post.id }}" class="carousel slide" data-ride="carousel">
+                <div class="carousel-inner">
+                    {% if post.photo1 %}
+                        {% for photo_url in post.photo1.split(',') %}
+                            <div class="carousel-item {% if loop.first %}active{% endif %}">
+                                <img class="d-block w-100" src="{{ photo_url }}" alt="Image" width="400" height="300">
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                    {% if post.video %}
+                        <div class="carousel-item">
+                           <iframe width="420" height="345" src="{{ post.video }}" frameborder="0" allowfullscreen></iframe> 
+                        </div>
+                    {% endif %}
+                </div>
+                <a class="carousel-control-prev" href="#carousel-{{ post.id }}" role="button" data-slide="prev">
+                    <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                    <span class="sr-only">Previous</span>
+                </a>
+                <a class="carousel-control-next" href="#carousel-{{ post.id }}" role="button" data-slide="next">
+                    <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                    <span class="sr-only">Next</span>
+                </a>
+            </div>
           </div>
         </article>
     {% endfor %}

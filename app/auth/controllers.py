@@ -4,7 +4,7 @@ from config import Config
 class AuthController:
 
 	def __init__(self):
-		self.db_conn = Config.SQLITE_CONN
+		self.db_conn = Config.MYSQL_CONN
 
 	def save_registration_form(self, register_data):
 		query = '''insert into users (username, email, password,instagram,twitter,quora,avatar) 

@@ -3,7 +3,7 @@ from config import Config
 
 class UserController:
 	def __init__(self):
-		self.db_conn = Config.SQLITE_CONN
+		self.db_conn = Config.MYSQL_CONN
 
 	def get_all_post_of_user(self,user_id):
 		query = '''select * from posts where user_id = "{}"'''.format(user_id)
