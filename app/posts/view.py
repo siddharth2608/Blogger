@@ -39,7 +39,6 @@ def parse_txt_data(file):
 		data['user_id'] = user_id
 		posts_data.append(data)
 	posts_data.pop(0)
-	print(posts_data)
 	return posts_data
 		
 
@@ -58,7 +57,6 @@ class CreatePost(MethodView):
 		if form.validate_on_submit():
 			post_data = {'title':form.title.data, 'content':form.content.data,'video':form.video.data, 'user_id': user_id} #, 'photo1': images
 			postid = PostController().save_post_data_with_image(post_data)
-			print("Post id"+str(postid))
 			img_list_count = len(request.files.getlist('photo1'))
 			if img_list_count>0:
 				image_lst = []
@@ -87,7 +85,6 @@ class PostList(MethodView):
 		posts_count = PostController().fetch_posts_count()
 		if request.cookies.get('userId') is not None:
 			token = request.cookies.get('userId')
-			print(token)
 		if token:
 			user_id = int(redis.get(token))
 		if user_id:
@@ -100,8 +97,6 @@ class PostList(MethodView):
 
 		posts_count = posts_count.get('posts_count')/5
 		page_num = math.ceil(posts_count)+1
-		print(posts_count)
-		print(page_num)
 		return render_template('/posts/home.html', posts=posts,page_num=page_num,title='Home')
 
 	
@@ -128,7 +123,6 @@ class ReactPost(MethodView):
 			print('undislike')
 			PostController().del_reaction(user_id,params.get('post_id'))
 			PostController().delete_like(params.get('post_id'),params.get('action'))
-		print('Successful')	
 		return Response(json.dumps(params),status=200,content_type='application/json')
 
 
@@ -172,7 +166,6 @@ class UpdatePost(MethodView):
 						url1 = f"https://{S3_BUCKET}.s3.amazonaws.com/{stored_file_name}"
 						image_lst.append(url1)
 				images = ",".join(image_lst)
-				print(images)
 				post_data= {'title':form.title.data, 'content':form.content.data,'video':form.video.data, 'id':post_id,'photo1':images}
 				PostController().update_post_with_image(post_data)
 				return redirect(url_for('bp.posts_list',page=1))
@@ -211,7 +204,6 @@ class SearchPost(MethodView):
 			redis.expire(searchword,1800)
 		else:
 			posts = json.loads(redis.get(searchword))
-		print(posts)
 		return render_template('/posts/searchresult.html', form=form, posts=posts,user_id=user_id,title='Search')
 
 class CreatePostFromFile(MethodView):
